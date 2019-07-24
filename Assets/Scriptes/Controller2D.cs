@@ -9,6 +9,8 @@ public class Controller2D : RaycastController {
     // 最大下り傾斜角？80度以上は下れず落ちる的な？
     float maxDescendAngle = 80;
 
+    Vector2 playerInput;
+
     public struct CollisionInfo {
         // 上、下？
         public bool above, below;
@@ -24,6 +26,8 @@ public class Controller2D : RaycastController {
         // 3次元ベクトルで前のフレームでの速度を表現？
         public Vector3 velocityOld;
         public int faceDir;
+        // わからん
+        public bool fallingThroughPlatform;
         // リセット
         public void Reset() {
             // 上下をfalseに
@@ -51,8 +55,11 @@ public class Controller2D : RaycastController {
         collisions.faceDir = 1;
     }
 
+	public void Move(Vector3 velocity, bool standingOnPlatform = false) {		
+        Move (velocity, Vector2.zero, standingOnPlatform);		
+    }
     // Playerから毎フレーム呼び出される
-    public void Move(Vector3 velocity, bool standingOnPlatform = false) {
+    public void Move(Vector3 velocity, Vector2 input, bool standingOnPlatform = false) {
         // RayCastの更新？
         // オブジェクトを元に作るRaycastの初期化
         // フレーム時点での位置が毎回スナップショット的に変わるので更新する必要がある
@@ -61,6 +68,8 @@ public class Controller2D : RaycastController {
         collisions.Reset ();
         // 引数の速度をvelocityOldに入れる？？なぜOld？
         collisions.velocityOld = velocity;
+        // 入力をクラス変数に格納
+        playerInput = input;
 
         // 縦方向の速度が0なら
         if (velocity.x != 0) {
@@ -213,6 +222,26 @@ public class Controller2D : RaycastController {
             Debug.DrawRay(rayOrigin, Vector2.up * directionY * rayLength,Color.red);
             // もしぶつかる場合であれば
             if (hit) {
+                // ぶつかったオブジェクトのtagが"Through"なら
+                if (hit.collider.tag == "Through") {
+                    // 右向き0距離なら何もしない
+                    if (directionY == 1 || hit.distance == 0) {
+                        continue;
+                    }
+                    // 衝突オブジェクトがfallingThroughPlatformでも何もしない
+                    if (collisions.fallingThroughPlatform) {
+                        continue;
+                    }
+                    // y軸の入力が-1なら
+                    if (playerInput.y == -1) {
+                        // fallingThroughPlatformをtrueにして
+                        collisions.fallingThroughPlatform = true;
+                        // .5s後にResetFallingThroughPlatformを実行
+                        Invoke("ResetFallingThroughPlatform",.5f);
+                        // 何もしない		
+                        continue;		
+                    }		
+                }
                 // y方向の速さを(raycastの当る距離 - スキンの厚さ) * 移動方向 に設定
                 velocity.y = (hit.distance - skinWidth) * directionY;
                 // rayLengthをraycastの当る距離に設定

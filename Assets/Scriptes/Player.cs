@@ -5,7 +5,8 @@ using UnityEngine;
 [RequireComponent (typeof (Controller2D))]
 public class Player : MonoBehaviour
 {
-    public float jumpHeight = 4;
+    public float maxJumpHeight = 4;
+    public float minJumpHeight = 1;
     // 頂点に達するまでの時間？
     public float timeToJumpApex = .4f;
     float accelerationTimeAirborne = .2f;
@@ -28,7 +29,8 @@ public class Player : MonoBehaviour
     float timeToWallUnstick;
 
     float gravity;
-    float jumpVelocity;
+    float maxJumpVelocity;
+    float minJumpVelocity;
     Vector3 velocity;
     float velocityXSmoothing;
     Controller2D controller;
@@ -37,13 +39,15 @@ public class Player : MonoBehaviour
     {
         // Controller2Dをコンポーネントとして取得して、インスタンス変数に渡す
         controller = GetComponent<Controller2D> ();
-        // -(2 * jumpHeight)/(timeToJumpApex^2) => h = gt^2 / 2 を変形して重力加速度を定義
-        // 画面の高さと落下時間から重力加速度を定義した方がメンテしやすい
-        gravity = -(2 * jumpHeight) / Mathf.Pow (timeToJumpApex, 2);
-        // v = v0 - gt を元に、最奥到達点で速度が0になる初速を算出
-        // 0 = v0 - gt => vo = gt
-        jumpVelocity = Mathf.Abs(gravity) * timeToJumpApex;
-        print ("Gravity: " + gravity + "  Jump Velocity: " + jumpVelocity);
+        // 重力加速度を計算して
+        gravity = -(2 * maxJumpHeight) / Mathf.Pow (timeToJumpApex, 2);
+        // 最大到達点まで行ける初速を求める
+        maxJumpVelocity = Mathf.Abs(gravity) * timeToJumpApex;
+        // Mathf.Sqrt: 平方根
+        // 重力加速度の絶対値の2倍のルート * 最小のジャンプの高さ
+        minJumpVelocity = Mathf.Sqrt (2 * Mathf.Abs (gravity) * minJumpHeight);
+        // ログを出力
+        print ("Gravity: " + gravity + "  Jump Velocity: " + maxJumpVelocity);
     }
 
     // フレームごとに呼び出される処理
@@ -78,12 +82,6 @@ public class Player : MonoBehaviour
             }
         }
 
-        // 上方向にぶつかっている or した方向にぶつかっている
-        // 縦方向の速度を0にする
-        if (controller.collisions.above || controller.collisions.below) {
-            velocity.y = 0;
-        }
-
         // キーボードのスペースが押されて
 	    if (Input.GetKeyDown (KeyCode.Space)) {
             // 壁滑り状態なら
@@ -113,12 +111,25 @@ public class Player : MonoBehaviour
             // 下が接触しているなら
             if (controller.collisions.below) {
                 // 普通のジャンプ
-                velocity.y = jumpVelocity;
+                velocity.y = maxJumpVelocity;
+            }
+        }
+        // スペースが押されて
+        if (Input.GetKeyUp (KeyCode.Space)) {
+            // yの速度が最小値より大きい
+            if (velocity.y > minJumpVelocity) {
+                // yを最小値にする？
+                velocity.y = minJumpVelocity;
             }
         }
 
         velocity.y += gravity * Time.deltaTime;
         // オブジェクトを移動させる
-        controller.Move (velocity * Time.deltaTime);
+        controller.Move (velocity * Time.deltaTime, input);
+        // 上下に何らかの制約がある場合は速さを0にする？
+        // なんでここ？
+        if (controller.collisions.above || controller.collisions.below) {
+            velocity.y = 0;
+        }
     }
 }
