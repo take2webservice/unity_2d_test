@@ -23,8 +23,8 @@ public class Controller2D : RaycastController {
         public float slopeAngle, slopeAngleOld;
         // 3次元ベクトルで前のフレームでの速度を表現？
         public Vector3 velocityOld;
+        public int faceDir;
         // リセット
-
         public void Reset() {
             // 上下をfalseに
             above = below = false;
@@ -47,7 +47,8 @@ public class Controller2D : RaycastController {
     void Start() {
         // 衝突用のオブジェクトの初期化
         collider = GetComponent<BoxCollider2D> ();
-        CalculateRaySpacing ();
+        // // オブジェクトの向きを指定？
+        collisions.faceDir = 1;
     }
 
     // Playerから毎フレーム呼び出される
@@ -61,18 +62,23 @@ public class Controller2D : RaycastController {
         // 引数の速度をvelocityOldに入れる？？なぜOld？
         collisions.velocityOld = velocity;
 
+        // 縦方向の速度が0なら
+        if (velocity.x != 0) {
+            // 速度の方向をfaceDirに入れる
+            // オブジェクトの向き？
+            collisions.faceDir = (int)Mathf.Sign(velocity.x);
+        }
+
         // 縦方向の速度が0未満なら
         if (velocity.y < 0) {
             // 傾斜を滑らせる
             // 中でvelocityに変化が加わる
             DescendSlope(ref velocity);
         }
-        // 縦方向の速度が0なら
-        if (velocity.x != 0) {
-            // 水平移動させる
-            // 中でvelocityに変化が加わる
-            HorizontalCollisions (ref velocity);
-        }
+
+        // 水平移動させる
+        // 中でvelocityに変化が加わる
+        HorizontalCollisions (ref velocity);
         // 縦方向の速度が0以外であれば
         if (velocity.y != 0) {
             // 傾斜を登らせる
@@ -90,11 +96,17 @@ public class Controller2D : RaycastController {
     }
 
     void HorizontalCollisions(ref Vector3 velocity) {
-        // x軸の速度の方向が正or0なら1, 負なら-1
-        float directionX = Mathf.Sign (velocity.x);
+        // もともと：x軸の速度の方向が正or0なら1, 負なら-1
+        // => 壁キックに際して顔の向きに変更(内部的にやってることは同じだがこっちの方が処理が早い)
+        float directionX = collisions.faceDir;
         // x軸の速度の絶対値を取得し、オブジェクトのスキンの厚さを加算
         float rayLength = Mathf.Abs (velocity.x) + skinWidth;
 
+        // 速度の絶対値がスキンの暑さより小さい場合
+	    if (Mathf.Abs(velocity.x) < skinWidth) {
+            // rayLengthをスキンの倍にする
+            rayLength = 2*skinWidth;
+        }
         // horizontalRayCountごとに以下の処理を行う
         // 下から順番に積み上げていく感じ
         for (int i = 0; i < horizontalRayCount; i ++) {
