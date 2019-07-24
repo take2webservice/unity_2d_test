@@ -9,8 +9,16 @@ public class PlatformController : RaycastController {
     public LayerMask passengerMask;
 
     // 床の移動方向？
-    public Vector3 move;
-
+	public Vector3[] localWaypoints;
+    Vector3[] globalWaypoints;
+    public float speed;
+    public bool cyclic;
+    public float waitTime;
+    [Range(0,2)]
+    public float easeAmount;
+    int fromWaypointIndex;
+    float percentBetweenWaypoints;
+    float nextMoveTime;
     // 床の上を動くオブジェクトの動きのリスト？
     List<PassengerMovement> passengerMovement;
     // 変形とコントローラの組み合わせの辞書？
@@ -20,6 +28,12 @@ public class PlatformController : RaycastController {
         // 継承元のRaycastControllerのStartを実行
         // Raycastの準備をしてる
         base.Start ();
+        // localWaypointsの長さでglobalWaypointsを初期化
+	    globalWaypoints = new Vector3[localWaypoints.Length];
+        // 長さ分、繰り返してtransformを加算したlocalWaypointをGlobalに代入
+        for (int i =0; i < localWaypoints.Length; i++) {
+            globalWaypoints[i] = localWaypoints[i] + transform.position;
+        }
     }
 
     void Update () {
@@ -27,10 +41,8 @@ public class PlatformController : RaycastController {
         // 移動後の位置でRaycastの準備をしてる
         UpdateRaycastOrigins ();
 
-        // 速度を計算？
-        // moveは初期化されてないけど、動くのか？
-        // Time.deltaTime: 最後のフレームを完了するのに要した時間
-        Vector3 velocity = move * Time.deltaTime;
+        // 地面の速度を計算？
+        Vector3 velocity = CalculatePlatformMovement();
 
         // 床の上を動くオブジェクトの動きを計算？
         CalculatePassengerMovement(velocity);
@@ -41,6 +53,65 @@ public class PlatformController : RaycastController {
         transform.Translate (velocity);
         // 移動後の床の上のオブジェクトを移動？
         MovePassengers (false);
+    }
+    // 滑らかにするための？
+	float Ease(float x) {
+        float a = easeAmount + 1;
+        return Mathf.Pow(x,a) / (Mathf.Pow(x,a) + Mathf.Pow(1-x,a));
+    }
+
+    // 床の動きを計算
+    Vector3 CalculatePlatformMovement() {	
+        // Time.time: ゲーム開始からの時間(秒)	
+        // nextMoveTime： 指定されてないけど動くのか？
+        Debug.Log($"nextMoveTime {nextMoveTime}s");
+        if (Time.time < nextMoveTime) {
+            // Vector3(0, 0, 0)
+            return Vector3.zero;
+        }
+        // fromWaypointIndexをglobalWaypointsの長さで割る
+        fromWaypointIndex %= globalWaypoints.Length;
+        // (a + 1) % a => 1じゃない？
+        int toWaypointIndex = (fromWaypointIndex + 1) % globalWaypoints.Length;
+        Debug.Log($"toWaypointIndex is {toWaypointIndex}");
+        //Vector3.Distance： a と b の間の距離
+        // 次のポイントまでの距離
+        float distanceBetweenWaypoints = Vector3.Distance (globalWaypoints [fromWaypointIndex], globalWaypoints [toWaypointIndex]);
+        // Time.deltaTime: 最後のフレームを完了するのに要した時間
+        // speed:初期化されてない: 速さ(point/s)
+        // distanceBetweenWaypoints: 距離
+        // 0.5km/h 1km => 0.5/1km = 1/2
+        // 時間に時間の逆数を足したらあかんのでは？
+        percentBetweenWaypoints += Time.deltaTime * speed/distanceBetweenWaypoints;
+        // Mathf.Clamp01: 0~1の範囲外であれば、0~1の間に入るようにする
+        percentBetweenWaypoints = Mathf.Clamp01 (percentBetweenWaypoints);
+        // よくわからん値をEaseで滑らかにする？
+        float easedPercentBetweenWaypoints = Ease (percentBetweenWaypoints);
+        // Vector3.Lerp: 直線上にある 2 つのベクトル間を補間します
+        // 徐々に目的地へ移動していくときに使用
+        // 次のポイントまでの中間ポイントをとる？
+        Vector3 newPos = Vector3.Lerp (globalWaypoints [fromWaypointIndex], globalWaypoints [toWaypointIndex], easedPercentBetweenWaypoints);
+        // percentBetweenWaypointsが1以上
+        if (percentBetweenWaypoints >= 1) {
+            // percentBetweenWaypointsを0にする
+            percentBetweenWaypoints = 0;
+            // fromWaypointIndexに1を追加
+            fromWaypointIndex ++;
+            // 周期的ではない
+            if (!cyclic) {
+                // fromWaypointIndexがglobalWaypointsの長さより大きい（範囲外？）
+                if (fromWaypointIndex >= globalWaypoints.Length-1) {
+                    // fromWaypointIndexを0にする
+                    fromWaypointIndex = 0;
+                    // globalWaypointsを反転させる
+                    System.Array.Reverse(globalWaypoints);
+                }
+            }
+            // 次に動き始める時間をフレームの開始する時間と待ち時間の和で設定する
+            nextMoveTime = Time.time + waitTime;
+        }
+        // 新しいポジションと現在のポジションの差分
+        return newPos - transform.position;
     }
 
     void MovePassengers(bool beforeMovePlatform) {
@@ -183,4 +254,24 @@ public class PlatformController : RaycastController {
         }
     }
 
+    // Gizmos: スクリーンビューにデバッグで色々表示するやつ
+    void OnDrawGizmos() {
+        // localWaypointsがnullじゃないなら
+        if (localWaypoints != null) {
+            // 次に描画されるギズモのカラーを赤に設定します
+            Gizmos.color = Color.red;
+            // 何かのサイズを0.3にする
+            float size = .3f;
+            // localWaypointsの長差分繰り返す
+            for (int i =0; i < localWaypoints.Length; i ++) {
+                // 実行中ならglobalWaypointsの指定の番号を、実行中でなければ、localWaypointsの指定の番号 + 現在のポジション？
+                Vector3 globalWaypointPos = (Application.isPlaying)?globalWaypoints[i] : localWaypoints[i] + transform.position;
+                // Gizmos.DrawLine: from から to に向かってラインを描画
+                // globalWaypointPosから(0, 0.3)を引いた位置から、globalWaypointPosに(0, 0.3)を足した位置までラインを引く
+                Gizmos.DrawLine(globalWaypointPos - Vector3.up * size, globalWaypointPos + Vector3.up * size);
+                // globalWaypointPosから(0.3, 0)を引いた位置から、globalWaypointPosに(0.3)を足した位置までラインを引く
+                Gizmos.DrawLine(globalWaypointPos - Vector3.left * size, globalWaypointPos + Vector3.left * size);
+            }
+        }
+    }
 }
