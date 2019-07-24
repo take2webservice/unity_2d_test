@@ -2,40 +2,12 @@
 using System.Collections;
 
 [RequireComponent (typeof (BoxCollider2D))]
-public class Controller2D : MonoBehaviour {
-
-    // 指定レイヤーの物理衝突のためのオブジェクト形状の定義
-    // Script適用時に自動取得される？
-    public LayerMask collisionMask;
-
-    // 当たり判定の拡張範囲？
-    const float skinWidth = .015f;
-    // x柚方向のレイヤー数？
-    public int horizontalRayCount = 4;
-    // y柚方向のレイヤー数？
-    public int verticalRayCount = 4;
+public class Controller2D : RaycastController {
 
     // 最大登り傾斜角？80度以上登れません的な？
     float maxClimbAngle = 80;
     // 最大下り傾斜角？80度以上は下れず落ちる的な？
     float maxDescendAngle = 80;
-
-    // x柚方向のレイヤーの余白？
-    float horizontalRaySpacing;
-    // y柚方向のレイヤーの余白？
-    float verticalRaySpacing;
-
-    // スクリプトを適用したオブジェクトの衝突装置
-    // 箱型
-    BoxCollider2D collider;
-
-    // 左上、右上、左下、右下のベクトルを持ったクラス
-    // 何に使う？？
-    struct RaycastOrigins {
-        public Vector2 topLeft, topRight;
-        public Vector2 bottomLeft, bottomRight;
-    }
-    RaycastOrigins raycastOrigins;
 
     public struct CollisionInfo {
         // 上、下？
@@ -79,7 +51,7 @@ public class Controller2D : MonoBehaviour {
     }
 
     // Playerから毎フレーム呼び出される
-    public void Move(Vector3 velocity) {
+    public void Move(Vector3 velocity, bool standingOnPlatform = false) {
         // RayCastの更新？
         // オブジェクトを元に作るRaycastの初期化
         // フレーム時点での位置が毎回スナップショット的に変わるので更新する必要がある
@@ -110,6 +82,11 @@ public class Controller2D : MonoBehaviour {
 
         // ゲームオブジェクトを指定した距離だけ移動させる
         transform.Translate (velocity);
+
+        // オブジェクトの上にいる場合、下にぶつかってるとする
+        if (standingOnPlatform) {
+            collisions.below = true;
+        }
     }
 
     void HorizontalCollisions(ref Vector3 velocity) {
@@ -143,6 +120,10 @@ public class Controller2D : MonoBehaviour {
             Debug.DrawRay(rayOrigin, Vector2.right * directionX * rayLength, Color.red, 10, false);
             // Physics2D.Raycastは暗黙の変換が走る仕様なので、booleanとして扱われる
             if (hit) {
+                // 接地してる場合は何もしない？
+                if (hit.distance == 0) {
+                    continue;
+                }
                 // 2点間（Vector2(0, 1) と Raycastがヒットしたサーフェスの法線）の角度を計算する
                 // サーフェス: Raycastがヒットした面
                 // 法線: 2次元ではある線に垂直なベクトル
@@ -333,45 +314,5 @@ public class Controller2D : MonoBehaviour {
             }
         }
     }
-
-    void UpdateRaycastOrigins() {
-        // Bounds(オブジェクトの外周)を取得
-        Bounds bounds = collider.bounds;
-        // オブジェクトの外周を3割(1.5?)削減する
-        bounds.Expand (-0.3f);
-        // raycastOriginsの左下をBoundsのx軸の最小、y軸の最小に設定する
-        raycastOrigins.bottomLeft = new Vector2 (bounds.min.x, bounds.min.y);
-        // raycastOriginsの右下をBoundsのx軸の最大、y軸の最小に設定する
-        raycastOrigins.bottomRight = new Vector2 (bounds.max.x, bounds.min.y);
-        // raycastOriginsの左上をBoundsのx軸の最小、y軸の最大に設定する
-        raycastOrigins.topLeft = new Vector2 (bounds.min.x, bounds.max.y);
-        // raycastOriginsの右上をBoundsのx軸の最大、y軸の最大に設定する
-        raycastOrigins.topRight = new Vector2 (bounds.max.x, bounds.max.y);
-    }
-
-    // レイヤーのスペースを計算
-    void CalculateRaySpacing() {
-        // boxcoliderの外枠？
-        Bounds bounds = collider.bounds;
-        // boundsを3%小さくする
-        bounds.Expand (-0.3f);
-
-        // x軸方向のレイヤー数？
-        // Math.Clamp: 値を指定範囲内に収めてくれるもの
-        // 2 ~ intの最大値の間であれば、既存のhorizontalRayCount、そうでなければ、その範囲に入る値
-        // 宰相が2なのは、あとで割り算で利用した際に -1 するので　0 除算を避けるため
-        horizontalRayCount = Mathf.Clamp (horizontalRayCount, 2, int.MaxValue);
-        // y軸方向のレイヤー数？
-        verticalRayCount = Mathf.Clamp (verticalRayCount, 2, int.MaxValue);
-
-        // boxcoliderのy軸のサイズを(x軸方向のレイヤー数-1)でわる？
-        // |           |
-        // | | | | | | |
-        // こんな感じで
-        horizontalRaySpacing = bounds.size.y / (horizontalRayCount - 1);
-        // boxcoliderのx軸のサイズを(x軸方向のレイヤー数-1)でわる？
-        verticalRaySpacing = bounds.size.x / (verticalRayCount - 1);
-    }
-
 
 }
