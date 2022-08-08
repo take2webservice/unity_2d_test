@@ -9,7 +9,8 @@ public class Controller2D : RaycastController {
     // 最大下り傾斜角？80度以上は下れず落ちる的な？
     float maxDescendAngle = 80;
 
-    Vector2 playerInput;
+    [HideInInspector]
+    public Vector2 playerInput;
 
     public struct CollisionInfo {
         // 上、下？

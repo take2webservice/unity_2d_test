@@ -28,6 +28,13 @@ public class RaycastController : MonoBehaviour
     // Raycastの発信元
     public RaycastOrigins raycastOrigins;
 
+    // AwakeはStartメソッドの前およびプレハブのインスタンス化直後前に呼び出される
+    // Startは最初のUpdateフレームが呼び出される前に呼び出される
+    // なぜかこれを追記したら、カメラのブレが止まった…why…？
+    public virtual void Awake() {
+        collider = GetComponent<BoxCollider2D> ();
+    }
+
     // Raycastの発信元の構造体
     public struct RaycastOrigins {
         // 左上、右上の座標
